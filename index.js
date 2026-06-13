@@ -14,10 +14,12 @@ const { commands, loadPlugins } = require("./lib/plugins");
 
 loadPlugins();
 
-// Helper: random delay between min and max milliseconds
-function randomDelay(minMs = 2000, maxMs = 5000) {
-    const delay = Math.floor(Math.random() * (maxMs - minMs + 1) + minMs);
-    return new Promise(resolve => setTimeout(resolve, delay));
+// Make commands globally available for menu (auto‑update)
+global.commands = commands;
+
+// Helper: fixed delay (no randomisation)
+function fixedDelay(ms = 800) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function startKira() {
@@ -54,7 +56,7 @@ async function startKira() {
 
             if (shouldReconnect) {
                 console.log("🔄 Reconnecting in 5 seconds...");
-                await randomDelay(5000, 5000); // Wait exactly 5 seconds
+                await fixedDelay(5000);
                 startKira();
             } else {
                 console.log("❌ Logged Out. Delete session and scan QR again.");
@@ -99,9 +101,9 @@ async function startKira() {
 
             if (!command) return;
 
-            // 🔥 BAN PROTECTION: Show typing indicator + random delay
+            // Optional: show typing indicator + fixed 800ms delay
             await sock.sendPresenceUpdate('composing', msg.key.remoteJid);
-            await randomDelay(2500, 6000); // 2.5 to 6 seconds human-like delay
+            await fixedDelay(800);
 
             await command.execute(sock, msg, args);
         } catch (err) {

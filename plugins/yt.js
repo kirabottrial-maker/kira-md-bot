@@ -1,4 +1,4 @@
-// plugins/insta.js - KIRA X MD (Instagram video/reel downloader)
+// plugins/yt.js - KIRA X MD (YouTube video downloader)
 const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
@@ -6,11 +6,11 @@ const fs = require('fs');
 const path = require('path');
 
 module.exports = {
-    name: 'insta',
-    alias: ['ig', 'instagram', 'reel'],
+    name: 'yt',
+    alias: ['youtube', 'ytdl'],
     category: 'downloader',
-    description: 'Download Instagram videos/reels',
-    usage: `${process.env.PREFIX || '.'}insta <URL>`,
+    description: 'Download YouTube videos',
+    usage: `${process.env.PREFIX || '.'}yt <URL>`,
 
     async execute(sock, msg, args) {
         const jid = msg.key.remoteJid;
@@ -25,7 +25,7 @@ module.exports = {
 
         const tempDir = path.join(__dirname, '../temp');
         if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-        const outputPath = path.join(tempDir, `insta_${Date.now()}.mp4`);
+        const outputPath = path.join(tempDir, `yt_${Date.now()}.mp4`);
 
         const ytDlpPath = path.join(__dirname, '../yt-dlp.exe');
         const cookiePath = path.join(__dirname, '../cookies.txt');

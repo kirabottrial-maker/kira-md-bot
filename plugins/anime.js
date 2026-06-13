@@ -1,6 +1,3 @@
-// plugins/anime.js - Search anime info from MyAnimeList (no API key required)
-const axios = require('axios');
-
 module.exports = {
     name: 'anime',
     alias: ['searchanime'],
@@ -17,62 +14,68 @@ module.exports = {
             return;
         }
 
-        // Loading reaction
         await sock.sendMessage(jid, { react: { text: "⏳", key: msg.key } });
 
         try {
-            // Search anime using Jikan API (no API key needed)
             const searchUrl = `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&sfw&limit=1`;
-            const response = await axios.get(searchUrl);
-            const animeList = response.data.data;
-
-            if (!animeList || animeList.length === 0) {
-                await sock.sendMessage(jid, { text: `*📺 ANIME SEARCH*\n\n❌ *No anime found* for "*${query}*".\n➤ Try checking the spelling or use a different keyword.` });
+            const response = await fetch(searchUrl);
+            const result = await response.json();
+            
+            // ഇവിടെയാണ് മാറ്റം: result.data ഉണ്ടോ എന്ന് കൃത്യമായി ചെക്ക് ചെയ്യുന്നു
+            if (!result.data || result.data.length === 0) {
+                await sock.sendMessage(jid, { text: `*📺 ANIME SEARCH*\n\n❌ *No anime found*` });
                 await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
                 return;
             }
 
-            const anime = animeList[0];
+            const anime = result.data[0];
 
-            // Build premium anime info response
+            // കൃത്യമായ ഡാറ്റാ ഫീൽഡുകൾ ഉപയോഗിക്കുന്നു
             const title = anime.title || 'Unknown';
-            const englishTitle = anime.title_english || 'N/A';
-            const episodes = anime.episodes || 'Unknown';
+            const eng = anime.title_english || 'N/A';
+            const eps = anime.episodes || 'Unknown';
             const status = anime.status || 'Unknown';
             const score = anime.score || 'N/A';
-            const ranked = anime.rank || 'N/A';
-            const popularity = anime.popularity || 'N/A';
+            const rank = anime.rank || 'N/A';
+            const pop = anime.popularity || 'N/A';
             const members = anime.members ? anime.members.toLocaleString() : 'N/A';
             const genres = anime.genres ? anime.genres.map(g => g.name).join(', ') : 'N/A';
-            const synopsis = anime.synopsis ? anime.synopsis.substring(0, 350) + '...' : 'No synopsis available.';
+            const syno = anime.synopsis ? anime.synopsis.substring(0, 250) + '...' : 'No synopsis.';
             const url = anime.url || 'https://myanimelist.net';
+            const imgUrl = anime.images?.jpg?.large_image_url || '';
 
-            const premiumMessage = `🎌 *ANIME INFO* 🎌
+            const premiumMessage = `🎌 *KIRA ANIME INFO* 🎌
 
 📖 *Title* : ${title}
-🌐 *English Title* : ${englishTitle}
-📺 *Episodes* : ${episodes}
+🌐 *English Title* : ${eng}
+📺 *Episodes* : ${eps}
 ⚡ *Status* : ${status}
 ⭐ *Score* : ${score} / 10
-🎖️ *Ranked* : #${ranked}
-🔥 *Popularity* : #${popularity}
+🎖️ *Ranked* : #${rank}
+🔥 *Popularity* : #${pop}
 👥 *Members* : ${members}
 🎭 *Genres* : ${genres}
 
 📝 *Synopsis* :
-${synopsis}
+${syno}
 
 🔗 *MAL Link* : ${url}
 
-━━━━━━━━━━━━━━━━━━━
-🔹 *Powered by KIRA X MD* 🔹`;
+━━━━━━━━━━━━━━━━━━━`;
 
-            await sock.sendMessage(jid, { text: premiumMessage });
+            if (imgUrl) {
+                const imgRes = await fetch(imgUrl);
+                const imgBuff = Buffer.from(await imgRes.arrayBuffer());
+                await sock.sendMessage(jid, { image: imgBuff, caption: premiumMessage }, { quoted: msg });
+            } else {
+                await sock.sendMessage(jid, { text: premiumMessage }, { quoted: msg });
+            }
+
             await sock.sendMessage(jid, { react: { text: "✅", key: msg.key } });
 
         } catch (error) {
             console.error('Anime search error:', error);
-            await sock.sendMessage(jid, { text: `*📺 ANIME SEARCH*\n\n❌  : ${error.message}\n➤ *Please try again later.*` });
+            await sock.sendMessage(jid, { text: `*📺 ANIME SEARCH*\n\n❌ Error occurred!` });
             await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
         }
     }

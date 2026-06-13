@@ -1,88 +1,73 @@
-// plugins/movie.js - KIRA X MD (Using Official OMDb API)
-const axios = require('axios');
-
+// plugins/menu.js - KIRA X MD (Premium dashboard menu)
 module.exports = {
-    name: 'movie',
-    alias: ['film', 'cinema'],
-    category: 'search',
-    description: 'Get detailed info about any movie',
-    usage: `${process.env.PREFIX || '.'}movie <movie name>`,
+    name: 'menu',
+    alias: ['help', 'commands', 'dashboard'],
+    category: 'utility',
+    description: 'Show bot dashboard with command list',
+    usage: `${process.env.PREFIX || '.'}menu`,
 
     async execute(sock, msg, args) {
         const jid = msg.key.remoteJid;
-        const query = (args && Array.isArray(args) ? args.join(' ') : '').trim();
+        const prefix = process.env.PREFIX || '.';
+        const commands = global.commands || [];
 
-        if (!query) {
-            await sock.sendMessage(jid, { text: `🎬 *MOVIE SEARCH*\n\n❌ *Missing movie name*\n➤ Example: ${process.env.PREFIX || '.'}movie Inception` }, { quoted: msg });
-            return;
+        // Bot info
+        const botName = process.env.BOT_NAME || 'KIRA X MD';
+        const ownerName = process.env.OWNER_NAME || 'Madhav';
+        const mode = process.env.MODE === 'private' ? '👑 Private' : '🌍 Public';
+        const platform = `Node.js ${process.version}`;
+        const totalCommands = commands.length;
+        const user = msg.pushName || 'User';
+        const userJid = msg.key.participant || jid;
+
+        // Optional: uptime (if bot started time is stored globally)
+        const uptime = global.startTime ? formatUptime(Date.now() - global.startTime) : 'N/A';
+
+        // Build the dashboard
+        let menu = `╭━━━━━━━━━━━━━━━━━━━╮\n`;
+        menu += `┃✨ *${botName}* ✨\n`;
+        menu += `╰━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        menu += `┌─👤 *USER INFO*\n`;
+        menu += `│  Name : ${user}\n`;
+        menu += `│  JID  : ${userJid.split('@')[0]}\n`;
+        menu += `└──────────────────\n\n`;
+        menu += `┌─🤖 *BOT STATS*\n`;
+        menu += `│  Mode      : ${mode}\n`;
+        menu += `│  Owner     : ${ownerName}\n`;
+        menu += `│  Platform  : ${platform}\n`;
+        menu += `│  Commands  : ${totalCommands}\n`;
+        menu += `│  Uptime    : ${uptime}\n`;
+        menu += `└──────────────────\n\n`;
+        menu += `┌─📜 *COMMANDS (${totalCommands})*\n`;
+        menu += `│  ${prefix}menu – show this panel\n`;
+
+        // List first 10 commands (to keep message short)
+        const maxDisplay = 15;
+        for (let i = 0; i < Math.min(commands.length, maxDisplay); i++) {
+            const cmd = commands[i];
+            if (cmd.name === 'menu') continue;
+            const aliases = cmd.alias?.length ? ` (${cmd.alias.slice(0,2).map(a=>prefix+a).join(', ')})` : '';
+            menu += `│  ${prefix}${cmd.name}${aliases}\n`;
         }
-
-        await sock.sendMessage(jid, { react: { text: "🎬", key: msg.key } });
-        const statusMsg = await sock.sendMessage(jid, { text: `🔍 *Searching for* : "${query}"...` });
-
-        try {
-            const apiKey = process.env.OMDB_API_KEY;
-            if (!apiKey) throw new Error("OMDB_API_KEY not found in environment variables");
-
-            const url = `http://www.omdbapi.com/?apikey=${apiKey}&t=${encodeURIComponent(query)}&plot=full`;
-            const response = await axios.get(url);
-            const movie = response.data;
-
-            if (movie.Response === "False") {
-                throw new Error(movie.Error || "Movie not found");
-            }
-
-            const title = movie.Title || 'Unknown';
-            const year = movie.Year || 'Unknown';
-            const rated = movie.Rated || 'N/A';
-            const released = movie.Released || 'Unknown';
-            const runtime = movie.Runtime || 'Unknown';
-            const genre = movie.Genre || 'Unknown';
-            const director = movie.Director || 'Unknown';
-            const writer = movie.Writer || 'Unknown';
-            const actors = movie.Actors || 'Unknown';
-            const plot = movie.Plot || 'No synopsis available.';
-            const language = movie.Language || 'Unknown';
-            const country = movie.Country || 'Unknown';
-            const awards = movie.Awards || 'N/A';
-            const imdbRating = movie.imdbRating || 'N/A';
-            const imdbId = movie.imdbID || '';
-            const poster = movie.Poster !== 'N/A' ? movie.Poster : 'Not available';
-            const boxOffice = movie.BoxOffice || 'N/A';
-            const production = movie.Production || 'N/A';
-
-            const responseText = `🎬 *MOVIE INFO* 🎬
-
-📖 *Title* : ${title} (${year})
-⭐ *IMDb Rating* : ${imdbRating}/10
-🎭 *Genres* : ${genre}
-⏱️ *Runtime* : ${runtime}
-🎬 *Director* : ${director}
-✍️ *Writer* : ${writer}
-👥 *Cast* : ${actors}
-📅 *Release Date* : ${released}
-🗣️ *Language* : ${language}
-🌍 *Country* : ${country}
-🏆 *Awards* : ${awards}
-💰 *Box Office* : ${boxOffice}
-🏭 *Production* : ${production}
-
-📝 *Plot* :
-${plot.length > 350 ? plot.substring(0, 350) + '...' : plot}
-
-🔗 *IMDb* : https://www.imdb.com/title/${imdbId}
-🖼️ *Poster* : ${poster}
-
-━━━━━━━━━━━━━━━━━━━
-🔹 *KIRA X MD* 🔹`;
-
-            await sock.sendMessage(jid, { text: responseText, edit: statusMsg.key });
-            await sock.sendMessage(jid, { react: { text: "✅", key: msg.key } });
-
-        } catch (err) {
-            console.error("Movie error:", err);
-            await sock.sendMessage(jid, { text: `❌ *Error* : ${err.message}`, edit: statusMsg.key });
-            await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
+        if (commands.length > maxDisplay) {
+            menu += `│  ... and ${commands.length - maxDisplay} more\n`;
         }
+        menu += `└──────────────────\n\n`;
+        menu += `💡 *Send ${prefix}help <command>* for usage.\n`;
+        menu += `━━━━━━━━━━━━━━━━━━━\n🔹 *${botName}* 🔹`;
+
+        await sock.sendMessage(jid, { text: menu }, { quoted: msg });
     }
 };
+
+// Helper to format uptime
+function formatUptime(ms) {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    if (days > 0) return `${days}d ${hours % 24}h`;
+    if (hours > 0) return `${hours}h ${minutes % 60}m`;
+    if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+    return `${seconds}s`;
+}

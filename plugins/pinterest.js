@@ -1,35 +1,49 @@
-const { commands } = require("../lib/plugins");
-const { exec } = require("child_process");
+// plugins/pinterest.js - KIRA X MD (Pinterest downloader – silent, only reactions)
+const primesave = require('primesave-dl');
+const axios = require('axios');
 
-commands.push({
-    name: "pinterest",
-    alias: ["pin", "pdl"],
-    execute: async (sock, msg, args) => {
-        const url = args;
-        if (!url || !url.includes("pinterest.com")) {
-            return await sock.sendMessage(msg.key.remoteJid, { text: "⚠️ Please provide a valid Pinterest link!" });
+module.exports = {
+    name: 'pinterest',
+    alias: ['pin', 'pindl'],
+    category: 'downloader',
+    description: 'Download Pinterest media (silent, only reactions)',
+    usage: `${process.env.PREFIX || '.'}pinterest <URL>`,
+
+    async execute(sock, msg, args) {
+        const jid = msg.key.remoteJid;
+        const url = (args && Array.isArray(args) ? args.join(' ') : '').trim();
+
+        if (!url) {
+            await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
+            await sock.sendMessage(jid, { text: `📌 *PINTEREST*\n\nMissing URL\nExample: .pinterest https://pin.it/xxxxx` }, { quoted: msg });
+            return;
         }
 
-        await sock.sendMessage(msg.key.remoteJid, { text: "⏳ Fetching..." });
+        // Start reaction
+        await sock.sendMessage(jid, { react: { text: "📌", key: msg.key } });
 
-        // Debug: Log the command being run to your terminal
-        const command = `yt-dlp -g "${url}"`;
-        console.log("Executing:", command);
+        try {
+            const result = await primesave(url);
+            if (!result.success || !result.options || result.options.length === 0) throw new Error('No media');
 
-        exec(command, (err, stdout, stderr) => {
-            if (err) {
-                // This will print the actual error from yt-dlp in your terminal
-                console.error("DEBUG ERROR:", stderr);
-                return sock.sendMessage(msg.key.remoteJid, { text: "❌ Error: " + stderr.slice(0, 50) });
+            const media = result.options[0];
+            const mediaUrl = media.url;
+            const isVideo = media.type === 'Video';
+
+            const mediaRes = await axios.get(mediaUrl, { responseType: 'arraybuffer', timeout: 30000 });
+            const mediaBuffer = Buffer.from(mediaRes.data);
+
+            if (isVideo) {
+                await sock.sendMessage(jid, { video: mediaBuffer, mimetype: 'video/mp4' });
+            } else {
+                await sock.sendMessage(jid, { image: mediaBuffer });
             }
 
-            const mediaUrl = stdout.trim().split('\n');
-            console.log("Media URL found:", mediaUrl);
-            
-            sock.sendMessage(msg.key.remoteJid, { 
-                image: { url: mediaUrl }, 
-                caption: "✅ KIRA X MD Pinterest Downloader" 
-            });
-        });
+            // Success reaction
+            await sock.sendMessage(jid, { react: { text: "✅", key: msg.key } });
+        } catch (err) {
+            console.error("Pinterest error:", err);
+            await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
+        }
     }
-});
+};
