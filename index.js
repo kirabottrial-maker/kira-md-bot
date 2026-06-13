@@ -17,9 +17,17 @@ loadPlugins();
 // Make commands globally available for menu (auto‑update)
 global.commands = commands;
 
+// 🚀 SPEED OPTIMIZATION: Command Map for Instant Lookup
+const commandMap = new Map();
+commands.forEach(cmd => {
+    commandMap.set(cmd.name, cmd);
+    if (cmd.alias) {
+        cmd.alias.forEach(alias => commandMap.set(alias, cmd));
+    }
+});
+
 async function startKira() {
     const { state, saveCreds } = await useMultiFileAuthState("./session");
-
     const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
@@ -34,11 +42,12 @@ async function startKira() {
 
         if (qr) {
             console.log("\n📱 Scan QR Code:\n");
+            // 🛠️ FIXED: QR കോഡ് കൃത്യം ചതുരത്തിൽ വരാൻ { small: true } ആക്കി!
             qrcode.generate(qr, { small: true });
         }
 
         if (connection === "open") {
-            console.log("✅ KIRA X MD Connected Successfully!");
+            console.log("✅ KIRA X MD Connected Successfully! 🚀 Ready to fly!");
         }
 
         if (connection === "close") {
@@ -62,9 +71,10 @@ async function startKira() {
 
     sock.ev.on("messages.upsert", async ({ messages }) => {
         try {
-            const msg = messages[0];
+            const msg = messages;
 
-            if (!msg.message) return;
+            // 🚀 SPEED OPTIMIZATION: സ്റ്റാറ്റസ് മെസ്സേജുകൾ റീഡ് ചെയ്ത് ബോട്ട് സ്ലോ ആവാതിരിക്കാൻ
+            if (!msg.message || msg.key.remoteJid === 'status@broadcast') return;
 
             const text =
                 msg.message.conversation ||
@@ -78,7 +88,7 @@ async function startKira() {
             const commandName = text
                 .slice(prefix.length)
                 .trim()
-                .split(" ")[0]
+                .split(" ")
                 .toLowerCase();
 
             const args = text
@@ -87,18 +97,15 @@ async function startKira() {
                 .split(/ +/)
                 .filter(Boolean);
 
-            const command = commands.find(
-                cmd =>
-                    cmd.name === commandName ||
-                    (cmd.alias && cmd.alias.includes(commandName))
-            );
+            // 🚀 SPEED OPTIMIZATION: Instant Command Execution
+            const command = commandMap.get(commandName);
 
             if (!command) return;
 
             // No delay, no typing indicator – instant execution
             await command.execute(sock, msg, args);
         } catch (err) {
-            console.log("Command Error:", err);
+            console.error("Command Error:", err);
         }
     });
 }
