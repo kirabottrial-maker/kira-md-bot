@@ -1,5 +1,6 @@
 const { downloadMediaMessage } = require("@whiskeysockets/baileys");
 const FormData = require("form-data");
+const axios = require("axios"); // Railway-ൽ timeout കൊടുക്കാൻ axios ഉപയോഗിക്കുന്നു
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 module.exports = {
@@ -21,10 +22,11 @@ module.exports = {
         try {
             await sock.sendMessage(jid, { react: { text: "🎧", key: msg.key } });
 
-            // logger ഒഴിവാക്കി സൈലന്റ് ആയി ഡൗൺലോഡ് ചെയ്യുന്നു
+            // 1. മീഡിയ ഡൗൺലോഡ് ചെയ്യുന്നു
             const mediaBuffer = await downloadMediaMessage({ message: quoted }, "buffer", {}, {});
             if (!mediaBuffer) throw new Error("Failed to download media buffer from WhatsApp.");
 
+            // 2. Catbox-ലേക്ക് അപ്‌ലോഡ് ചെയ്യുന്നു
             const form = new FormData();
             form.append("reqtype", "fileupload");
             form.append("fileToUpload", mediaBuffer, { filename: "song.mp3" });
@@ -36,14 +38,17 @@ module.exports = {
 
             const mediaUrl = await uploadRes.text();
 
-            if (!mediaUrl.startsWith("http")) throw new Error(`Audio upload failed. Catbox returned: ${mediaUrl}`);
+            if (!mediaUrl.startsWith("http")) throw new Error(`Audio upload failed.`);
 
+            // 3. API വഴി പാട്ട് കണ്ടുപിടിക്കുന്നു (നേരിട്ട് നൽകിയ ലിങ്ക്)
             const apiUrl = `https://jerrycoder.oggyapi.workers.dev/tool/identify?url=${encodeURIComponent(mediaUrl)}`;
-            const identifyRes = await (await fetch(apiUrl)).json();
+            
+            // Railway-ൽ ഹാങ് ആവാതിരിക്കാൻ 15 സെക്കൻഡ് Timeout ആഡ് ചെയ്തു
+            const identifyRes = await axios.get(apiUrl, { timeout: 15000 });
+            
+            if (identifyRes.data.status !== "success") throw new Error("API could not identify the song.");
 
-            if (identifyRes.status !== "success") throw new Error("API could not identify the song.");
-
-            const resData = identifyRes.result;
+            const resData = identifyRes.data.result;
             const title = resData.title;
             const artist = resData.artist;
             const album = resData.Album; 
@@ -65,6 +70,7 @@ module.exports = {
             caption += `│\n╰──────────────⊷\n\n`;
             if (shazamUrl) caption += `🔗 *Listen on Shazam:*\n${shazamUrl}`;
 
+            // റിസൾട്ട് അയക്കുന്നു
             await sock.sendMessage(jid, { 
                 image: { url: image || "https://telegra.ph/file/0c32688031d27944062a7.jpg" }, 
                 caption 
@@ -73,9 +79,9 @@ module.exports = {
             await sock.sendMessage(jid, { react: { text: "✅", key: msg.key } });
 
         } catch (err) {
-            console.error("Find Command Error:", err.message); // എറർ മാത്രം ടെർമിനലിൽ കാണിക്കും
+            console.error("Find Command Error:", err.message); 
             await sock.sendMessage(jid, { 
-                text: `╭──『 ❌ *ERROR* 』──⊷\n│ ${err.message}\n╰──────────────⊷` 
+                text: `╭──『 ❌ *ERROR* 』──⊷\n│ Failed to identify. Server may be busy or song not recognized.\n╰──────────────⊷` 
             }, { quoted: msg });
             await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
         }

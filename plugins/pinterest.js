@@ -7,7 +7,7 @@ module.exports = {
     alias: ['pin', 'pindl', 'pinsearch'],
     category: 'downloader',
     description: 'Download or Search Pinterest media',
-    usage: `${process.env.PREFIX || '.'}pinterest <URL or Query>`,
+    usage: '.pinterest <URL or Query>', // .env ഒഴിവാക്കി
 
     async execute(sock, msg, args) {
         const jid = msg.key.remoteJid;
@@ -24,16 +24,17 @@ module.exports = {
         const isUrl = input.match(/(https?:\/\/(www\.)?(pinterest\.com|pin\.it)\/[^\s]+)/gi);
 
         if (isUrl) {
-            const url = isUrl[0];
+            const url = isUrl;
             let filePath = '';
             let success = false;
 
             try {
+                // നിന്റെ API list നേരിട്ട് ഇവിടെ കൊടുത്തു
                 const apis = [
+                    `https://jerrycoder.oggyapi.workers.dev/down/pinterest?url=${encodeURIComponent(url)}`,
                     `https://api.siputzx.my.id/api/d/pinterest?url=${encodeURIComponent(url)}`,
                     `https://api.ryzendesu.vip/api/downloader/pinterest?url=${encodeURIComponent(url)}`,
-                    `https://api-aswin-sparky.koyeb.app/api/downloader/pinterest?url=${encodeURIComponent(url)}`,
-                    `https://jerrycoder.oggyapi.workers.dev/down/pinterest?url=${encodeURIComponent(url)}`
+                    `https://api-aswin-sparky.koyeb.app/api/downloader/pinterest?url=${encodeURIComponent(url)}`
                 ];
 
                 for (let i = 0; i < apis.length; i++) {
@@ -41,7 +42,8 @@ module.exports = {
                     let isVideo = false;
 
                     try {
-                        const res = await axios.get(apis[i], { timeout: 6000 });
+                        // Railway Timeout 15s
+                        const res = await axios.get(apis[i], { timeout: 15000 });
                         const data = res.data;
 
                         if (data.data && data.data.url) mediaUrl = data.data.url;
@@ -68,6 +70,7 @@ module.exports = {
                             method: 'GET',
                             responseType: 'stream',
                             maxRedirects: 5,
+                            timeout: 20000, // ഡൗൺലോഡ് ചെയ്യാനും സമയം കൂട്ടി കൊടുത്തു
                             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
                         });
 
@@ -107,19 +110,21 @@ module.exports = {
                     }
                 }
 
-                if (!success) throw new Error("Could not download a playable video from any server.");
+                if (!success) throw new Error("Could not download media from any server.");
                 await sock.sendMessage(jid, { react: { text: "✅", key: msg.key } });
 
             } catch (err) {
-                console.error("Pinterest DL Error:", err.message); // എറർ മാത്രം കാണിക്കും
-                await sock.sendMessage(jid, { text: `❌ *Download failed:* ${err.message}` }, { quoted: msg });
+                console.error("Pinterest DL Error:", err.message); 
+                await sock.sendMessage(jid, { text: `❌ *Download failed:* Server busy.` }, { quoted: msg });
                 await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
             }
 
         } else {
+            // Search ഭാഗം
             try {
                 const searchUrl = `https://jerrycoder.oggyapi.workers.dev/search/pin?q=${encodeURIComponent(input)}&type=image&limit=5`;
-                const res = await axios.get(searchUrl);
+                // Railway Timeout 15s
+                const res = await axios.get(searchUrl, { timeout: 15000 });
                 
                 let results = [];
                 if (res.data.result && Array.isArray(res.data.result)) results = res.data.result;
@@ -139,6 +144,7 @@ module.exports = {
                         try {
                             const imgRes = await axios.get(imgUrl, {
                                 responseType: 'arraybuffer',
+                                timeout: 10000,
                                 headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
                             });
                             
@@ -152,12 +158,12 @@ module.exports = {
                     }
                 }
                 
-                if (sentCount === 0) throw new Error("Failed to bypass Pinterest block for all images.");
+                if (sentCount === 0) throw new Error("Failed to download images.");
                 await sock.sendMessage(jid, { react: { text: "✅", key: msg.key } });
 
             } catch (err) {
-                console.error("Pinterest Search Error:", err.message); // എറർ മാത്രം കാണിക്കും
-                await sock.sendMessage(jid, { text: `❌ *Search failed:* ${err.message}` }, { quoted: msg });
+                console.error("Pinterest Search Error:", err.message); 
+                await sock.sendMessage(jid, { text: `❌ *Search failed:* Server busy.` }, { quoted: msg });
                 await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
             }
         }

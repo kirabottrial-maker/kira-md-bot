@@ -6,7 +6,7 @@ module.exports = {
     alias: ['lyric', 'songlyrics'],
     category: 'search',
     description: 'Get lyrics for a song',
-    usage: `${process.env.PREFIX || '.'}lyrics <song name>`,
+    usage: '.lyrics <song name>', // .env ഒഴിവാക്കി
 
     async execute(sock, msg, args) {
         const jid = msg.key.remoteJid;
@@ -37,7 +37,8 @@ module.exports = {
 
             for (let i = 0; i < restApis.length; i++) {
                 try {
-                    const res = await axios.get(restApis[i], { timeout: 6000 });
+                    // Railway Timeout 15s
+                    const res = await axios.get(restApis[i], { timeout: 15000 });
                     const data = res.data;
 
                     let extractedLyrics = '';
@@ -69,6 +70,7 @@ module.exports = {
             }
 
             if (!success) {
+                // Genius API keys hardcoded (.env ഒഴിവാക്കി)
                 const apiKeys = [
                     'hvolhA2B11TmnPaSx83LANzxwgMmfqNbZLm7sQGGOKCcvBEaATJT_GjnWoBfgwr1',
                     'm0QJK3lXTw18WcdQh2J5vESa-hE1oXeMCUSVlIff8XV-bIRldZhZsTMxsHFeKzVM64Mrl63C6snrAOKwrxOkQQ',
@@ -81,7 +83,7 @@ module.exports = {
                         const searches = await Client.songs.search(query);
                         
                         if (searches && searches.length > 0) {
-                            const song = searches[0];
+                            const song = searches;
                             const lyrics = await song.lyrics();
                             
                             if (lyrics && lyrics.trim().length > 10) {
@@ -121,7 +123,7 @@ module.exports = {
             await sock.sendMessage(jid, { react: { text: "✅", key: msg.key } });
             
         } catch (err) {
-            console.error("Lyrics Error:", err.message); // എറർ മാത്രം കാണിക്കും
+            console.error("Lyrics Error:", err.message); 
             await sock.sendMessage(jid, { text: `❌ *Lyrics not found for:* "${query}"`, edit: statusMsg.key });
             await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
         }

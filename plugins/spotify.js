@@ -6,7 +6,7 @@ module.exports = {
     alias: ['sp', 'spotifydl'],
     category: 'downloader',
     description: 'Download audio from Spotify link or song name (Play Style)',
-    usage: `${process.env.PREFIX || '.'}spotify <Spotify URL or Song Name>`,
+    usage: '.spotify <Spotify URL or Song Name>', // .env ഒഴിവാക്കി
 
     async execute(sock, msg, args) {
         const jid = msg.key.remoteJid;
@@ -30,11 +30,14 @@ module.exports = {
             const isSpotifyUrl = query.match(/(https?:\/\/open\.spotify\.com\/(track|playlist|album)\/[a-zA-Z0-9]+)/gi);
 
             if (isSpotifyUrl) {
-                const url = isSpotifyUrl[0];
+                const url = isSpotifyUrl;
                 if (statusMsg) await sock.sendMessage(jid, { text: `🔍 *Fetching metadata from Spotify...*`, edit: statusMsg.key }).catch(()=>{});
 
+                // 🛑 ഇവിടെയുണ്ടായിരുന്ന URL എറർ ഫിക്സ് ചെയ്തു
                 const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
-                const oembedRes = await axios.get(oembedUrl, { timeout: 5000 });
+                
+                // Railway-ൽ ഹാങ് ആവാതിരിക്കാൻ 15 സെക്കൻഡ് Timeout
+                const oembedRes = await axios.get(oembedUrl, { timeout: 15000 });
                 
                 if (oembedRes.data && oembedRes.data.title) {
                     searchTarget = `${oembedRes.data.title} ${oembedRes.data.author_name || ''}`.trim();
@@ -67,7 +70,8 @@ module.exports = {
 
             for (let i = 0; i < apis.length; i++) {
                 try {
-                    const res = await axios.get(apis[i], { timeout: 5000 });
+                    // Railway Timeout 15s
+                    const res = await axios.get(apis[i], { timeout: 15000 });
                     const data = res.data;
                     
                     if (data.data && data.data.dl) audioUrl = data.data.dl;
@@ -96,11 +100,11 @@ module.exports = {
             await sock.sendMessage(jid, { react: { text: "🎧", key: msg.key } });
 
         } catch (err) {
-            console.error("Spotify Error:", err.message); // എറർ മാത്രം കാണിക്കും
+            console.error("Spotify Error:", err.message); 
             if (statusMsg) {
-                await sock.sendMessage(jid, { text: `❌ *Failed! (${err.message})*`, edit: statusMsg.key }).catch(()=>{});
+                await sock.sendMessage(jid, { text: `❌ *Failed! Server might be busy.*`, edit: statusMsg.key }).catch(()=>{});
             } else {
-                await sock.sendMessage(jid, { text: `❌ *Failed! (${err.message})*` }, { quoted: msg });
+                await sock.sendMessage(jid, { text: `❌ *Failed! Server might be busy.*` }, { quoted: msg });
             }
             await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
         }

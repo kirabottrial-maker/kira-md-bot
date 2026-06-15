@@ -5,14 +5,13 @@ module.exports = {
     alias: ['youtube', 'ytdl'],
     category: 'downloader',
     description: 'Download YouTube videos',
-    usage: `${process.env.PREFIX || '.'}yt <URL>`,
+    usage: '.yt <URL>', // .env ഒഴിവാക്കി
 
     async execute(sock, msg, args) {
         const jid = msg.key.remoteJid;
         let url = (args && Array.isArray(args) ? args.join(' ') : '').trim();
         const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
 
-        // റിപ്ലൈ മെസ്സേജിൽ നിന്നും ലിങ്ക് എടുക്കാനുള്ള ലോജിക്
         if (!url && quoted) {
             const getRawText = (q) => {
                 return q.conversation || 
@@ -29,9 +28,8 @@ module.exports = {
                 rawText = getRawText(quoted.extendedTextMessage.contextInfo.quotedMessage);
             }
 
-            // YouTube ലിങ്ക് കണ്ടുപിടിക്കാൻ (youtube.com ഉം youtu.be ഉം)
             const match = rawText.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-            if (match) url = `https://youtu.be/${match[1]}`;
+            if (match) url = `https://youtu.be/${match}`;
         }
 
         if (!url || (!url.includes('youtube.com') && !url.includes('youtu.be'))) {
@@ -44,16 +42,15 @@ module.exports = {
         try {
             statusMsg = await sock.sendMessage(jid, { text: `📥 *Downloading YouTube video...*` });
 
-            // പുതിയ Jerrycoder API
+            // API വിളിക്കാൻ 15 സെക്കൻഡ് ടൈംഔട്ട്
             const apiUrl = `https://jerrycoder.oggyapi.workers.dev/down/youtube?url=${encodeURIComponent(url)}`;
-            const res = await axios.get(apiUrl);
+            const res = await axios.get(apiUrl, { timeout: 15000 });
             
             const apiData = res.data;
             let videoUrl = '';
 
-            // പലതരം API Response ഫോർമാറ്റുകൾ സപ്പോർട്ട് ചെയ്യാൻ
             if (apiData.result) {
-                videoUrl = apiData.result.video || apiData.result.url || apiData.result.download_url || apiData.result.hd || (Array.isArray(apiData.result) ? apiData.result[0].url : '');
+                videoUrl = apiData.result.video || apiData.result.url || apiData.result.download_url || apiData.result.hd || (Array.isArray(apiData.result) ? apiData.result.url : '');
             } else if (apiData.data) {
                 videoUrl = apiData.data.video || apiData.data.url || apiData.data.download_url || apiData.data.hd;
             } else if (apiData.url || apiData.video) {
@@ -61,12 +58,11 @@ module.exports = {
             }
 
             if (!videoUrl) {
-                console.log("YT API Response Error:", JSON.stringify(apiData, null, 2));
                 throw new Error('Video link not found in API response');
             }
 
-            // നേരിട്ട് ബഫർ എടുക്കുന്നു
-            const { data: buffer } = await axios.get(videoUrl, { responseType: 'arraybuffer' });
+            // വലിയ വീഡിയോകൾ ഡൗൺലോഡ് ആവാൻ 20 സെക്കൻഡ് ടൈംഔട്ട് കൊടുത്തു
+            const { data: buffer } = await axios.get(videoUrl, { responseType: 'arraybuffer', timeout: 20000 });
 
             await sock.sendMessage(jid, { 
                 video: buffer, 
@@ -81,7 +77,7 @@ module.exports = {
             await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
             
             if (statusMsg && statusMsg.key) {
-                await sock.sendMessage(jid, { text: `❌ *Failed to download!*`, edit: statusMsg.key });
+                await sock.sendMessage(jid, { text: `❌ *Failed to download! Server busy.*`, edit: statusMsg.key });
             } else {
                 await sock.sendMessage(jid, { text: `❌ *Failed to download!*` }, { quoted: msg });
             }

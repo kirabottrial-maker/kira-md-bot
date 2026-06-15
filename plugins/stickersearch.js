@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const ffmpeg = require("fluent-ffmpeg");
 const webp = require("node-webpmux");
+const axios = require("axios"); 
 
 const ffmpegPath = path.join(__dirname, '../ffmpeg.exe');
 if (fs.existsSync(ffmpegPath)) ffmpeg.setFfmpegPath(ffmpegPath);
@@ -37,26 +38,30 @@ module.exports = {
         await sock.sendMessage(jid, { react: { text: "🔍", key: msg.key } });
 
         try {
-            const url = `https://g.tenor.com/v1/search?q=${encodeURIComponent(query)}&key=LIVDSRZULELA&limit=5`;
-            const res = await fetch(url);
-            const json = await res.json();
+            const apiKey = "LIVDSRZULELA"; 
+            const url = `https://g.tenor.com/v1/search?q=${encodeURIComponent(query)}&key=${apiKey}&limit=5`;
             
-            // 🛑 അഡ്വാൻസ്ഡ് URL എക്സ്ട്രാക്ഷൻ (Undefined എറർ വരില്ല)
-            const item = json.results[0];
-            const media = item.media[0];
-            const mediaUrl = media.gif?.url || media.mediumgif?.url || media.tinygif?.url;
+            const res = await axios.get(url, { timeout: 15000 });
+            const json = res.data;
+            
+            const item = json.results?.[0];
+            if (!item) throw new Error("No GIFs found");
 
-            if (!mediaUrl) throw new Error("Could not find usable media URL");
+            // 🚨 FIX: Safe Navigation Operator ഉപയോഗിച്ച് എറർ ഒഴിവാക്കുന്നു
+            const mediaUrl = item?.media?.[0]?.gif?.url || item?.media?.[0]?.mediumgif?.url || item?.media?.[0]?.tinygif?.url;
 
-            const buffer = Buffer.from(await (await fetch(mediaUrl)).arrayBuffer());
+            if (!mediaUrl) throw new Error("Could not find usable media URL from Tenor.");
+
+            const bufferRes = await axios.get(mediaUrl, { responseType: 'arraybuffer', timeout: 15000 });
+            const buffer = Buffer.from(bufferRes.data);
+            
             const tempDir = path.join(__dirname, "../temp");
-            if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+            if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
             
             const inputPath = path.join(tempDir, `ssearch_${Date.now()}.gif`);
             const outputPath = path.join(tempDir, `ssearch_${Date.now()}.webp`);
             fs.writeFileSync(inputPath, buffer);
 
-            // FFmpeg എറർ ഒഴിവാക്കാൻ കൂടുതൽ സ്പെസിഫിക് ആയ കമാൻഡ്
             await new Promise((resolve, reject) => {
                 ffmpeg(inputPath)
                     .outputOptions([
@@ -80,8 +85,10 @@ module.exports = {
             fs.unlinkSync(inputPath);
             fs.unlinkSync(outputPath);
             await sock.sendMessage(jid, { react: { text: "✅", key: msg.key } });
+            
         } catch (e) {
-            console.log("StickerSearch Error:", e);
+            console.error("StickerSearch Error:", e.message);
+            await sock.sendMessage(jid, { text: `❌ *Failed to fetch sticker. Try another word.*` }, { quoted: msg });
             await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
         }
     }

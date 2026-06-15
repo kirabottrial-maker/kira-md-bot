@@ -6,6 +6,7 @@ module.exports = {
     alias: ['song', 'music', 'audio'],
     category: 'downloader',
     description: 'Search and play YouTube audio or use direct link',
+    usage: '.play <song name or link>',
     
     async execute(sock, msg, args) {
         const jid = msg.key.remoteJid;
@@ -16,6 +17,7 @@ module.exports = {
         }
 
         await sock.sendMessage(jid, { react: { text: "🔍", key: msg.key } });
+        let statusMsg = await sock.sendMessage(jid, { text: `🔍 *Searching for the song...*` });
 
         try {
             let url = '';
@@ -36,6 +38,7 @@ module.exports = {
             }
 
             await sock.sendMessage(jid, { react: { text: "📥", key: msg.key } });
+            await sock.sendMessage(jid, { text: `📥 *Bypassing server blocks to download audio...*`, edit: statusMsg.key });
 
             let audioUrl = '';
 
@@ -46,9 +49,20 @@ module.exports = {
                 `https://eliteprotech-apis.zone.id/ytdown?format=mp3&url=${encodeURIComponent(url)}` 
             ];
 
+            // 🚨 ബ്രൗസറിനെപ്പോലെ അഭിനയിക്കാൻ Anti-Block Headers 🚨
+            const axiosConfig = {
+                timeout: 15000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'Accept': 'application/json, text/plain, */*',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Referer': 'https://google.com/'
+                }
+            };
+
             for (let i = 0; i < apis.length; i++) {
                 try {
-                    const res = await axios.get(apis[i], { timeout: 5000 });
+                    const res = await axios.get(apis[i], axiosConfig);
                     const data = res.data;
                     
                     if (data.data && data.data.dl) audioUrl = data.data.dl;
@@ -60,23 +74,28 @@ module.exports = {
                     if (audioUrl && audioUrl.startsWith('http')) {
                         break; 
                     }
-                } catch (e) {}
+                } catch (e) {
+                    console.log(`Play API ${i+1} failed/blocked. Trying next...`);
+                }
             }
 
             if (!audioUrl) {
-                throw new Error('All audio servers are currently busy. Try again!');
+                throw new Error('Railway IP blocked by all servers or servers are down.');
             }
+
+            await sock.sendMessage(jid, { text: `✨ *Sending audio stream...*`, edit: statusMsg.key });
 
             await sock.sendMessage(jid, { 
                 audio: { url: audioUrl }, 
                 mimetype: 'audio/mpeg'
             }, { quoted: msg });
             
+            await sock.sendMessage(jid, { text: `✅ *Track sent successfully!*`, edit: statusMsg.key });
             await sock.sendMessage(jid, { react: { text: "🎧", key: msg.key } });
 
         } catch (err) {
-            console.error("Play Command Error:", err.message); // എറർ മാത്രം കാണിക്കും
-            await sock.sendMessage(jid, { text: `❌ *Failed! (${err.message})*` }, { quoted: msg });
+            console.error("Play Command Error:", err.message); 
+            await sock.sendMessage(jid, { text: `❌ *Failed! Server block or busy.*`, edit: statusMsg.key });
             await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
         }
     }

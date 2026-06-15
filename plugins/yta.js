@@ -5,7 +5,7 @@ module.exports = {
     alias: ['ytaudio', 'ytmp3'],
     category: 'downloader',
     description: 'Download YouTube audio as document',
-    usage: `${process.env.PREFIX || '.'}yta <URL>`,
+    usage: '.yta <URL>',
 
     async execute(sock, msg, args) {
         const jid = msg.key.remoteJid;
@@ -26,7 +26,7 @@ module.exports = {
                 rawText = getRawText(quoted.extendedTextMessage.contextInfo.quotedMessage);
             }
             const match = rawText.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-            if (match) url = `https://youtu.be/${match[1]}`;
+            if (match) url = `https://youtu.be/${match}`;
         }
 
         if (!url || (!url.includes('youtube.com') && !url.includes('youtu.be'))) {
@@ -51,6 +51,7 @@ module.exports = {
 
             for (let i = 0; i < apis.length; i++) {
                 try {
+                    // Railway Timeout 15s
                     const res = await axios.get(apis[i], { timeout: 15000 });
                     const data = res.data;
                     
@@ -86,11 +87,11 @@ module.exports = {
             await sock.sendMessage(jid, { react: { text: "✅", key: msg.key } });
 
         } catch (err) {
-            console.error("YTA Downloader Error:", err.message); // എറർ മാത്രം ടെർമിനലിൽ കാണിക്കും
+            console.error("YTA Downloader Error:", err.message);
             await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
             
             if (statusMsg && statusMsg.key) {
-                await sock.sendMessage(jid, { text: `❌ *Failed! (${err.message})*`, edit: statusMsg.key });
+                await sock.sendMessage(jid, { text: `❌ *Failed! Server busy.*`, edit: statusMsg.key });
             } else {
                 await sock.sendMessage(jid, { text: `❌ *Failed to download!*` }, { quoted: msg });
             }

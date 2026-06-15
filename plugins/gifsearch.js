@@ -5,7 +5,7 @@ module.exports = {
     alias: ["searchgif", "giphy"],
     category: "search",
     description: "Search for GIFs using Giphy API",
-    usage: `${process.env.PREFIX || '.'}gifsearch <query>`,
+    usage: ".gifsearch <query>", 
 
     async execute(sock, msg, args) {
         const jid = msg.key.remoteJid;
@@ -18,15 +18,13 @@ module.exports = {
         }
 
         try {
-            // സെർച്ച് തുടങ്ങുന്നു എന്ന് കാണിക്കാൻ
             await sock.sendMessage(jid, { react: { text: "🔍", key: msg.key } });
 
-            const apiKey = process.env.GIPHY_API_KEY || "myagxm9fUMzQKZYIyjX3qu48X3Abrxqc";
+            const apiKey = "myagxm9fUMzQKZYIyjX3qu48X3Abrxqc";
             
-            // Giphy API ലേക്ക് റിക്വസ്റ്റ് അയക്കുന്നു
-            const res = await axios.get(`https://api.giphy.com/v1/gifs/search?api_key=${apiKey}&q=${encodeURIComponent(query)}&limit=1`);
+            // 🚨 FIX: 1 റിസൾട്ടിന് പകരം 5 എണ്ണം എടുക്കുന്നു, എങ്കിലേ MP4 തപ്പി കണ്ടുപിടിക്കാൻ പറ്റൂ 🚨
+            const res = await axios.get(`https://api.giphy.com/v1/gifs/search?api_key=${apiKey}&q=${encodeURIComponent(query)}&limit=5`, { timeout: 15000 });
 
-            // റിസൾട്ട് ഉണ്ടോ എന്ന് ചെക്ക് ചെയ്യുന്നു
             if (!res.data || !res.data.data || res.data.data.length === 0) {
                 await sock.sendMessage(jid, { react: { text: "❌", key: msg.key } });
                 return await sock.sendMessage(jid, { 
@@ -34,27 +32,43 @@ module.exports = {
                 }, { quoted: msg });
             }
 
-            // 🚨 THE FIX: Array യിൽ നിന്ന് ഒന്നാമത്തെ [0] ഡാറ്റ എടുക്കുന്നു 🚨
-            const gifData = res.data.data[0];
             let gifUrl = '';
+            let isMp4 = false;
 
-            // ഒന്നാമത്തെ ഒബ്ജക്റ്റിൽ ഒറിജിനൽ എംപി4 ഉണ്ടോ എന്ന് നോക്കുന്നു
-            if (gifData && gifData.images) {
-                if (gifData.images.original && gifData.images.original.mp4) {
-                    gifUrl = gifData.images.original.mp4;
-                } else if (gifData.images.downsized_small && gifData.images.downsized_small.mp4) {
-                    gifUrl = gifData.images.downsized_small.mp4;
+            // 5 റിസൾട്ടുകളിൽ എവിടെയെങ്കിലും MP4 ഉണ്ടോ എന്ന് ചെക്ക് ചെയ്യുന്നു
+            for (const item of res.data.data) {
+                const imgs = item.images;
+                if (imgs) {
+                    const mp4Link = imgs.original?.mp4 || imgs.downsized_small?.mp4 || imgs.fixed_height?.mp4;
+                    if (mp4Link) {
+                        gifUrl = mp4Link;
+                        isMp4 = true;
+                        break; // MP4 കിട്ടിയാൽ ലൂപ്പ് നിർത്തും
+                    }
                 }
             }
 
-            if (!gifUrl) throw new Error("Playable video format not found for this GIF.");
+            // 5 എണ്ണത്തിലും MP4 ഇല്ലെങ്കിൽ, ആദ്യത്തെ ഒബ്ജക്റ്റിലെ സാധാരണ .gif URL എടുക്കും
+            if (!gifUrl && res.data.data.images?.original?.url) {
+                gifUrl = res.data.data.images.original.url;
+            }
 
-            // വാട്സാപ്പിലേക്ക് അയക്കുന്നു
-            await sock.sendMessage(jid, {
-                video: { url: gifUrl },
-                gifPlayback: true, // ഇത് കൊടുത്താലേ വാട്സാപ്പിൽ അത് GIF ആയി പ്ലേ ആകൂ
-                caption: `*GIPHY:* ${query}`
-            }, { quoted: msg });
+            if (!gifUrl) throw new Error("Could not find any playable media for this search.");
+
+            if (isMp4) {
+                // MP4 ആണെങ്കിൽ WhatsApp GIF ആയി പ്ലേ ആവും
+                await sock.sendMessage(jid, {
+                    video: { url: gifUrl },
+                    gifPlayback: true, 
+                    caption: `*GIPHY:* ${query}`
+                }, { quoted: msg });
+            } else {
+                // MP4 ഇല്ലെങ്കിൽ സാധാരണ Image ആയി അയക്കും (എറർ വരാതിരിക്കാൻ)
+                await sock.sendMessage(jid, {
+                    image: { url: gifUrl },
+                    caption: `*GIPHY:* ${query}\n_(MP4 format not available for this GIF)_`
+                }, { quoted: msg });
+            }
 
             await sock.sendMessage(jid, { react: { text: "✅", key: msg.key } });
 
