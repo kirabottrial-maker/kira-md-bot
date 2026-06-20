@@ -631,4 +631,6 @@ if (
 
 }
 
-startKira();
+startKira().catch(err => {
+    console.error("START ERROR:", err);
+});
