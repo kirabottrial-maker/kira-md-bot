@@ -414,7 +414,6 @@ if (!global.botOnline) return;
             msg.message?.extendedTextMessage?.text
         );
 
-        const jid = msg.key.remoteJid;
         if (global.botOnline) {
     await sock.sendPresenceUpdate(
         "available",
