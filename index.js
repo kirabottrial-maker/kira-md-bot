@@ -131,8 +131,9 @@ const { version } = await fetchLatestBaileysVersion();
         }
     }
 });
-console.log("CONNECTION UPDATE:", update);
+
 sock.ev.on("connection.update", async (update) => {
+    console.log("CONNECTION UPDATE:", update);
     const { connection, lastDisconnect } = update;
 
     if (connection === "open") {
